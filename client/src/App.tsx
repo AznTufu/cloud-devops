@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import "./App.css";
 
 type Todo = {
@@ -14,13 +14,19 @@ const App = () => {
   const [editingText, setEditingText] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const API_BASE_URL = "http://localhost:3005";
+  // Configuration de l'API selon l'environnement
+  const getApiBaseUrl = () => {
+    // En production sur AWS, utiliser l'URL du serveur actuel sur le port 3005
+    if (window.location.hostname !== "localhost") {
+      return `http://${window.location.hostname}:3005`;
+    }
+    // En développement local, utiliser localhost
+    return "http://localhost:3005";
+  };
 
-  useEffect(() => {
-    fetchTodos();
-  }, []);
+  const API_BASE_URL = getApiBaseUrl();
 
-  const fetchTodos = async () => {
+  const fetchTodos = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`${API_BASE_URL}/todos`);
@@ -33,7 +39,11 @@ const App = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_BASE_URL]);
+
+  useEffect(() => {
+    fetchTodos();
+  }, [fetchTodos]);
 
   const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +75,7 @@ const App = () => {
       });
 
       if (response.ok) {
-        setTodos(todos.filter(todo => todo.id !== id));
+        setTodos(todos.filter((todo) => todo.id !== id));
       }
     } catch (error) {
       console.error("Erreur lors de la suppression de la tâche:", error);
@@ -84,9 +94,7 @@ const App = () => {
 
       if (response.ok) {
         const updatedTodo = await response.json();
-        setTodos(todos.map(todo => 
-          todo.id === id ? updatedTodo : todo
-        ));
+        setTodos(todos.map((todo) => (todo.id === id ? updatedTodo : todo)));
       }
     } catch (error) {
       console.error("Erreur lors de la mise à jour de la tâche:", error);
@@ -112,9 +120,7 @@ const App = () => {
 
       if (response.ok) {
         const updatedTodo = await response.json();
-        setTodos(todos.map(todo => 
-          todo.id === id ? updatedTodo : todo
-        ));
+        setTodos(todos.map((todo) => (todo.id === id ? updatedTodo : todo)));
         setEditingId(null);
         setEditingText("");
       }
@@ -151,11 +157,16 @@ const App = () => {
 
       <div className="todos-container">
         {todos.length === 0 ? (
-          <p className="empty-state">Aucune tâche pour le moment. Ajoutez-en une !</p>
+          <p className="empty-state">
+            Aucune tâche pour le moment. Ajoutez-en une !
+          </p>
         ) : (
           <ul className="todos-list">
             {todos.map((todo) => (
-              <li key={todo.id} className={`todo-item ${todo.completed ? 'completed' : ''}`}>
+              <li
+                key={todo.id}
+                className={`todo-item ${todo.completed ? "completed" : ""}`}
+              >
                 <div className="todo-content">
                   <input
                     type="checkbox"
@@ -163,7 +174,7 @@ const App = () => {
                     onChange={(e) => toggleTodo(todo.id, e.target.checked)}
                     className="todo-checkbox"
                   />
-                  
+
                   {editingId === todo.id ? (
                     <div className="edit-form">
                       <input
@@ -174,16 +185,13 @@ const App = () => {
                         autoFocus
                       />
                       <div className="edit-buttons">
-                        <button 
+                        <button
                           onClick={() => saveEdit(todo.id)}
                           className="save-button"
                         >
                           ✅ Sauver
                         </button>
-                        <button 
-                          onClick={cancelEdit}
-                          className="cancel-button"
-                        >
+                        <button onClick={cancelEdit} className="cancel-button">
                           ❌ Annuler
                         </button>
                       </div>
@@ -192,7 +200,7 @@ const App = () => {
                     <span className="todo-text">{todo.text}</span>
                   )}
                 </div>
-                
+
                 {editingId !== todo.id && (
                   <div className="todo-actions">
                     <button
@@ -217,9 +225,10 @@ const App = () => {
 
       <div className="stats">
         <p>
-          Total : {todos.length} tâche{todos.length !== 1 ? 's' : ''} | 
-          Terminée{todos.filter(t => t.completed).length !== 1 ? 's' : ''} : {todos.filter(t => t.completed).length} | 
-          En cours : {todos.filter(t => !t.completed).length}
+          Total : {todos.length} tâche{todos.length !== 1 ? "s" : ""} | Terminée
+          {todos.filter((t) => t.completed).length !== 1 ? "s" : ""} :{" "}
+          {todos.filter((t) => t.completed).length} | En cours :{" "}
+          {todos.filter((t) => !t.completed).length}
         </p>
       </div>
     </div>

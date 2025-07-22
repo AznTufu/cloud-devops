@@ -22,6 +22,7 @@ resource "aws_instance" "app" {
   instance_type          = "t2.micro"
   vpc_security_group_ids = [aws_security_group.app.id]
   subnet_id             = aws_subnet.public[0].id
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
   user_data = <<-EOF
     #!/bin/bash
@@ -34,8 +35,13 @@ resource "aws_instance" "app" {
     # Attendre que Docker soit prêt
     sleep 10
 
-    # Démarrer les conteneurs directement
-    docker run -d --name backend --restart unless-stopped -p 3005:3005 -e NODE_ENV=production romainparisot/cloud-devops-app-backend:latest
+    # Démarrer les conteneurs avec les variables d'environnement DynamoDB
+    docker run -d --name backend --restart unless-stopped -p 3005:3005 \
+      -e NODE_ENV=production \
+      -e AWS_REGION=${var.region} \
+      -e DYNAMODB_TABLE_NAME=${var.app_name}-todos \
+      romainparisot/cloud-devops-app-backend:latest
+    
     docker run -d --name frontend --restart unless-stopped -p 80:80 romainparisot/cloud-devops-app-frontend:latest
   EOF
 
