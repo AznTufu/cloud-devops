@@ -81,6 +81,18 @@ app.delete("/todos/:id", (req, res) => {
   res.json(deletedTodo);
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "healthy", 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    version: "1.0.0"
+  });
+});
+
 app.listen(3005, () => {
-  console.log(`Server is running on port 3005`);
+  console.log(`🚀 Server is running on port 3005`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`💚 Health check available at: http://localhost:3005/health`);
 });
