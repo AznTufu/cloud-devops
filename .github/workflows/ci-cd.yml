@@ -147,7 +147,7 @@ jobs:
       - name: 🔍 Terraform Init
         run: |
           cd infra/terraform
-          terraform init
+          terraform init -reconfigure
 
       - name: 📋 Terraform Plan
         run: |

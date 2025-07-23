@@ -104,9 +104,12 @@ chmod +x infra/scripts/build-and-push.sh
 
 3. **Follow the pipeline** in GitHub Actions
 
-### Manual Deployment with Terraform
+### Manual Deployment with Terraform and S3
 
 ```bash
+# Setup S3 backend (ONCE ONLY):
+.\infra\scripts\setup-backend.ps1
+
 # Navigate to terraform folder
 cd infra/terraform
 
