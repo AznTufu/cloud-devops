@@ -32,18 +32,46 @@ resource "aws_instance" "app" {
     systemctl enable docker
     usermod -a -G docker ec2-user
 
+    # Installation du CloudWatch agent
+    wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+    rpm -U ./amazon-cloudwatch-agent.rpm
+
     # Attendre que Docker soit prêt
     sleep 10
 
-    # Démarrer les conteneurs avec les variables d'environnement DynamoDB
+    # Forcer le téléchargement des nouvelles images Docker
+    docker pull romainparisot/cloud-devops-app-backend:latest
+    docker pull romainparisot/cloud-devops-app-frontend:latest
+
+    # Démarrer les conteneurs avec logging vers stdout/stderr
     docker run -d --name backend --restart unless-stopped -p 3005:3005 \
       -e NODE_ENV=production \
       -e AWS_REGION=${var.region} \
       -e DYNAMODB_TABLE_NAME=${var.app_name}-todos \
+      --log-driver=awslogs \
+      --log-opt awslogs-group=/aws/ec2/cloud-devops-app/backend \
+      --log-opt awslogs-stream=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)-backend \
+      --log-opt awslogs-region=${var.region} \
       romainparisot/cloud-devops-app-backend:latest
     
-    docker run -d --name frontend --restart unless-stopped -p 80:80 romainparisot/cloud-devops-app-frontend:latest
+    docker run -d --name frontend --restart unless-stopped -p 80:80 \
+      --log-driver=awslogs \
+      --log-opt awslogs-group=/aws/ec2/cloud-devops-app/frontend \
+      --log-opt awslogs-stream=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)-frontend \
+      --log-opt awslogs-region=${var.region} \
+      romainparisot/cloud-devops-app-frontend:latest
+
+    # Attendre que les conteneurs démarrent
+    sleep 15
+    
+    # Vérifier que les conteneurs fonctionnent
+    docker ps
+    echo "Backend health check:" >> /var/log/setup.log
+    curl -f http://localhost:3005/health || echo "Backend not ready yet" >> /var/log/setup.log
   EOF
+
+  # Force replacement when user_data changes
+  user_data_replace_on_change = true
 
   tags = {
     Name = "${var.app_name}-server"

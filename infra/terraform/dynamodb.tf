@@ -16,6 +16,29 @@ resource "aws_dynamodb_table" "todos_table" {
   }
 }
 
+# CloudWatch Log Groups avec rétention de 1 jour
+resource "aws_cloudwatch_log_group" "frontend_logs" {
+  name              = "/aws/ec2/${var.app_name}/frontend"
+  retention_in_days = 1
+
+  tags = {
+    Name        = "${var.app_name}-frontend-logs"
+    Environment = "dev"
+    Project     = var.app_name
+  }
+}
+
+resource "aws_cloudwatch_log_group" "backend_logs" {
+  name              = "/aws/ec2/${var.app_name}/backend"
+  retention_in_days = 1
+
+  tags = {
+    Name        = "${var.app_name}-backend-logs"
+    Environment = "dev"
+    Project     = var.app_name
+  }
+}
+
 # IAM Role pour EC2 pour accéder à DynamoDB
 resource "aws_iam_role" "ec2_dynamodb_role" {
   name = "${var.app_name}-ec2-dynamodb-role"
@@ -39,7 +62,7 @@ resource "aws_iam_role" "ec2_dynamodb_role" {
   }
 }
 
-# IAM Policy pour DynamoDB
+# IAM Policy pour DynamoDB et CloudWatch
 resource "aws_iam_role_policy" "ec2_dynamodb_policy" {
   name = "${var.app_name}-ec2-dynamodb-policy"
   role = aws_iam_role.ec2_dynamodb_role.id
@@ -58,6 +81,17 @@ resource "aws_iam_role_policy" "ec2_dynamodb_policy" {
           "dynamodb:Query"
         ]
         Resource = aws_dynamodb_table.todos_table.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:PutLogEvents",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
+        ]
+        Resource = "*"
       }
     ]
   })
