@@ -8,6 +8,16 @@ output "backend_url" {
   description = "URL de votre API Express"
 }
 
+output "instance_public_ip" {
+  value = aws_instance.app.public_ip
+  description = "Adresse IP publique du serveur"
+}
+
+output "instance_public_dns" {
+  value = aws_instance.app.public_dns
+  description = "DNS publique du serveur"
+}
+
 output "public_ip" {
   value = aws_instance.app.public_ip
   description = "Adresse IP publique du serveur"

@@ -40,8 +40,8 @@ resource "aws_instance" "app" {
     sleep 10
 
     # Forcer le téléchargement des nouvelles images Docker
-    docker pull romainparisot/cloud-devops-app-backend:latest
-    docker pull romainparisot/cloud-devops-app-frontend:latest
+    docker pull ${var.docker_hub_username}/cloud-devops-app-backend:${var.server_image_tag}
+    docker pull ${var.docker_hub_username}/cloud-devops-app-frontend:${var.client_image_tag}
 
     # Démarrer les conteneurs avec logging vers stdout/stderr
     docker run -d --name backend --restart unless-stopped -p 3005:3005 \
@@ -52,14 +52,14 @@ resource "aws_instance" "app" {
       --log-opt awslogs-group=/aws/ec2/cloud-devops-app/backend \
       --log-opt awslogs-stream=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)-backend \
       --log-opt awslogs-region=${var.region} \
-      romainparisot/cloud-devops-app-backend:latest
+      ${var.docker_hub_username}/cloud-devops-app-backend:${var.server_image_tag}
     
     docker run -d --name frontend --restart unless-stopped -p 80:80 \
       --log-driver=awslogs \
       --log-opt awslogs-group=/aws/ec2/cloud-devops-app/frontend \
       --log-opt awslogs-stream=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)-frontend \
       --log-opt awslogs-region=${var.region} \
-      romainparisot/cloud-devops-app-frontend:latest
+      ${var.docker_hub_username}/cloud-devops-app-frontend:${var.client_image_tag}
 
     # Attendre que les conteneurs démarrent
     sleep 15
