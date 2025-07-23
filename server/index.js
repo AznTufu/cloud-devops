@@ -121,7 +121,7 @@ const startServer = async () => {
           process.env.DYNAMODB_TABLE_NAME || "cloud-devops-app-todos"
         }`
       );
-      console.log(`💚 Health check available at: http://localhost:3005/health`);
+      console.log(`💚 Health check available at: /health endpoint`);
     });
   } catch (error) {
     console.error("❌ Erreur lors du démarrage du serveur:", error);
