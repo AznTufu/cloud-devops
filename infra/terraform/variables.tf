@@ -49,6 +49,19 @@ variable "private_subnet_count" {
 }
 
 variable "docker_hub_username" {
-  description = "Your Docker Hub username"
+  description = "Docker Hub username"
   type        = string
+  default     = "romainparisot"
+}
+
+variable "server_image_tag" {
+  description = "Tag for the server Docker image"
+  type        = string
+  default     = "latest"
+}
+
+variable "client_image_tag" {
+  description = "Tag for the client Docker image"
+  type        = string
+  default     = "latest"
 }

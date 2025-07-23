@@ -103,7 +103,7 @@ jobs:
           echo "🏷️  Version: ${{ steps.meta.outputs.VERSION }}"
           echo "📦 SHA: ${{ steps.meta.outputs.SHORT_SHA }}"
 
-  # Job 3: Deploy (simulation pour l'instant)
+  # Job 3: Deploy to AWS with Terraform
   deploy:
     needs: docker-build-push
     runs-on: ubuntu-latest
@@ -118,24 +118,83 @@ jobs:
         run: |
           echo "VERSION=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
 
-      - name: 🚀 Deploy to production
+      - name: � Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: � Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: 🏗️ Update Terraform variables with new image tags
         run: |
-          echo "🚀 Déploiement en cours..."
-          echo "📦 Images disponibles:"
-          echo "   - Server: ${{ env.SERVER_IMAGE }}:${{ steps.image-info.outputs.VERSION }}"
-          echo "   - Client: ${{ env.CLIENT_IMAGE }}:${{ steps.image-info.outputs.VERSION }}"
-          echo ""
-          echo "🌐 URLs Docker Hub:"
-          echo "   - https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/cloud-devops-app-backend"
-          echo "   - https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/cloud-devops-app-frontend"
-          echo ""
-          echo "✅ Déploiement simulé terminé!"
-          echo "💡 Vous pouvez maintenant déployer avec:"
-          echo "   docker pull ${{ env.SERVER_IMAGE }}:latest"
-          echo "   docker pull ${{ env.CLIENT_IMAGE }}:latest"
+          cd infra/terraform
+          # Créer un fichier tfvars temporaire avec les nouvelles images
+          cat >> terraform.tfvars.tmp << EOF
+          server_image_tag = "${{ steps.image-info.outputs.VERSION }}"
+          client_image_tag = "${{ steps.image-info.outputs.VERSION }}"
+          docker_hub_username = "${{ secrets.DOCKER_USERNAME }}"
+          EOF
+          # Fusionner avec le fichier existant
+          cat terraform.tfvars terraform.tfvars.tmp > terraform.tfvars.new
+          mv terraform.tfvars.new terraform.tfvars
+          rm terraform.tfvars.tmp
+
+      - name: 🔍 Terraform Init
+        run: |
+          cd infra/terraform
+          terraform init
+
+      - name: 📋 Terraform Plan
+        run: |
+          cd infra/terraform
+          terraform plan -out=tfplan
+
+      - name: 🚀 Terraform Apply
+        run: |
+          cd infra/terraform
+          terraform apply -auto-approve tfplan
+
+      - name: 📊 Get deployment outputs
+        id: terraform-outputs
+        run: |
+          cd infra/terraform
+          echo "public_ip=$(terraform output -raw instance_public_ip)" >> $GITHUB_OUTPUT
+          echo "public_dns=$(terraform output -raw instance_public_dns)" >> $GITHUB_OUTPUT
+
+      - name: ⏳ Wait for application to be ready
+        run: |
+          echo "⏳ Attente que l'application soit prête..."
+          sleep 60
+          
+          # Vérifier que l'application répond
+          max_retries=10
+          retry_count=0
+          
+          while [ $retry_count -lt $max_retries ]; do
+            if curl -f -s "http://${{ steps.terraform-outputs.outputs.public_ip }}" > /dev/null; then
+              echo "✅ Application prête !"
+              break
+            else
+              echo "⏳ Tentative $((retry_count + 1))/$max_retries - En attente..."
+              sleep 30
+              retry_count=$((retry_count + 1))
+            fi
+          done
 
       - name: 🎉 Deployment success notification
         run: |
-          echo "::notice title=Deployment Success::🎉 Application deployed successfully!"
-          echo "::notice title=Server Image::${{ env.SERVER_IMAGE }}:latest"
-          echo "::notice title=Client Image::${{ env.CLIENT_IMAGE }}:latest"
+          echo "::notice title=Deployment Success::🎉 Application deployed successfully on AWS!"
+          echo "::notice title=Public IP::${{ steps.terraform-outputs.outputs.public_ip }}"
+          echo "::notice title=Public DNS::${{ steps.terraform-outputs.outputs.public_dns }}"
+          echo "::notice title=Frontend URL::http://${{ steps.terraform-outputs.outputs.public_ip }}"
+          echo "::notice title=Backend URL::http://${{ steps.terraform-outputs.outputs.public_ip }}:3005"
+          echo ""
+          echo "🌐 Application accessible à :"
+          echo "   - Frontend: http://${{ steps.terraform-outputs.outputs.public_ip }}"
+          echo "   - Backend API: http://${{ steps.terraform-outputs.outputs.public_ip }}:3005"
+          echo "   - DNS: http://${{ steps.terraform-outputs.outputs.public_dns }}"

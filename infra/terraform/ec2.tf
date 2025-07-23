@@ -40,9 +40,10 @@ resource "aws_instance" "app" {
       -e NODE_ENV=production \
       -e AWS_REGION=${var.region} \
       -e DYNAMODB_TABLE_NAME=${var.app_name}-todos \
-      romainparisot/cloud-devops-app-backend:latest
+      ${var.docker_hub_username}/cloud-devops-app-backend:${var.server_image_tag}
     
-    docker run -d --name frontend --restart unless-stopped -p 80:80 romainparisot/cloud-devops-app-frontend:latest
+    docker run -d --name frontend --restart unless-stopped -p 80:80 \
+      ${var.docker_hub_username}/cloud-devops-app-frontend:${var.client_image_tag}
   EOF
 
   tags = {
