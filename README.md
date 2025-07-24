@@ -4,10 +4,14 @@ Todo application with automated AWS deployment using Terraform, Docker, and GitH
 
 ## 🏗️ Architecture
 
+![Architecture Overview](img/architecture.png)
+
 ```
 Frontend (React + Vite) → Nginx → Port 80
 Backend (Express) → Node.js → Port 3005 → DynamoDB
 ```
+
+![Frontend Backend website](img/frontend_backend.png)
 
 **AWS Infrastructure:**
 - EC2 t2.micro
@@ -78,8 +82,10 @@ terraform apply
 ```bash
 git add .
 git commit -m "feat: your changes"
-git push origin main
-# → Automatic deployment via GitHub Actions
+git push origin feature-branch
+
+# Create Pull Request to main branch
+# → Automatic deployment via GitHub Actions on PR to main
 ```
 
 ## ⚙️ Configuration (First Time Setup)
@@ -126,7 +132,7 @@ docker-compose up --build
 
 ## 🔄 CI/CD Pipeline
 
-**Automatic deployment on push to `main`:**
+**Automatic deployment on Pull Request to `main`:**
 1. 🔨 Build & Test
 2. 🐳 Build & Push Docker images
 3. ✅ Verify S3 backend exists
@@ -211,4 +217,4 @@ aws dynamodb describe-table --table-name terraform-state-lock --region eu-west-1
 
 ---
 
-🎯 **Once S3 backend is configured, just `git push` to deploy to AWS!** 🚀
+🎯 **Once S3 backend is configured, create a Pull Request to main to deploy to AWS!** 🚀
