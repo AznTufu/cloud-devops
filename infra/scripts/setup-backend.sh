@@ -1,36 +1,40 @@
 #!/bin/bash
-# Script pour initialiser le backend S3 Terraform
-# EXÉCUTER UNE SEULE FOIS avant d'utiliser le pipeline
+# 🚀 Terraform S3 Backend Creation
+# Execute ONLY ONCE before using S3 backend
 
-echo "🚀 Initialisation du backend Terraform S3..."
+set -e
 
-# Vérifier que les credentials AWS sont configurés
-if ! aws sts get-caller-identity > /dev/null 2>&1; then
-    echo "❌ Erreur: AWS credentials non configurés"
-    echo "Configurez vos credentials avec: aws configure"
+echo "🚀 Creating Terraform S3 backend..."
+
+# Check AWS credentials
+if aws sts get-caller-identity >/dev/null 2>&1; then
+    ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+    echo "✅ AWS connected - Account: $ACCOUNT"
+else
+    echo "❌ AWS credentials not configured"
+    echo "💡 Run: aws configure"
     exit 1
 fi
 
-echo "✅ Credentials AWS OK"
+# Go to backend directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/../backend"
 
-# Se déplacer dans le dossier bootstrap
-cd "$(dirname "$0")/../backend"
+echo "🔧 Initializing Terraform..."
+terraform init -upgrade
 
-echo "🔧 Initialisation Terraform pour le bootstrap..."
-terraform init
+echo "📋 Planning..."
+terraform plan -out=backend.tfplan
 
-echo "📋 Planification de l'infrastructure backend..."
-terraform plan
+echo "🏗️ Creating S3 bucket and DynamoDB..."
+terraform apply -auto-approve backend.tfplan
 
-echo "🏗️ Création du bucket S3 et de la table DynamoDB..."
-terraform apply -auto-approve
-
-echo "✅ Backend S3 créé avec succès!"
 echo ""
-echo "📝 Prochaines étapes:"
-echo "1. Votre bucket S3 et table DynamoDB sont créés"
-echo "2. Le pipeline GitHub Actions utilisera automatiquement ce backend"
-echo "3. Vous pouvez maintenant pousser sur main pour déclencher le déploiement"
-echo ""
-echo "🎯 Ressources créées:"
+echo "✅ S3 backend created successfully!"
+echo "📊 Resources created:"
 terraform output
+
+echo ""
+echo "🎯 Next steps:"
+echo "  1. Push your code to GitHub"
+echo "  2. Pipeline will automatically use this backend"

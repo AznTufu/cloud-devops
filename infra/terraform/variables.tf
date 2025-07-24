@@ -65,3 +65,16 @@ variable "client_image_tag" {
   type        = string
   default     = "latest"
 }
+
+# Variables pour le backend S3 (utiles pour la documentation et les outputs)
+variable "terraform_state_bucket" {
+  description = "Nom du bucket S3 utilisé pour le state Terraform"
+  type        = string
+  default     = "cloud-devops-terraform-state-bucket"
+}
+
+variable "terraform_state_key" {
+  description = "Clé du fichier state dans le bucket S3"
+  type        = string
+  default     = "terraform/state/terraform.tfstate"
+}

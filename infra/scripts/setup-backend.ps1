@@ -1,37 +1,37 @@
-# Script PowerShell pour initialiser le backend S3 Terraform
-# EXECUTER UNE SEULE FOIS avant d'utiliser le pipeline
+# Terraform S3 Backend Creation
+# Execute ONLY ONCE before using S3 backend
 
-Write-Host "Initialisation du backend Terraform S3..." -ForegroundColor Green
+Write-Host "Creating Terraform S3 backend..." -ForegroundColor Green
 
-# Verifier que les credentials AWS sont configures
+# Check AWS credentials
 try {
-    aws sts get-caller-identity | Out-Null
-    Write-Host "Credentials AWS OK" -ForegroundColor Green
+    $identity = aws sts get-caller-identity --output json | ConvertFrom-Json
+    Write-Host "AWS connected - Account: $($identity.Account)" -ForegroundColor Green
 } catch {
-    Write-Host "Erreur: AWS credentials non configures" -ForegroundColor Red
-    Write-Host "Configurez vos credentials avec: aws configure" -ForegroundColor Yellow
+    Write-Host "AWS credentials not configured" -ForegroundColor Red
+    Write-Host "Run: aws configure" -ForegroundColor Yellow
     exit 1
 }
 
-# Se deplacer dans le dossier bootstrap
-$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
-Set-Location "$scriptPath\..\backend"
+# Go to backend directory
+$backendPath = "$PSScriptRoot\..\backend"
+Set-Location $backendPath
 
-Write-Host "Initialisation Terraform pour le bootstrap..." -ForegroundColor Blue
-terraform init
+Write-Host "Initializing Terraform..." -ForegroundColor Blue
+terraform init -upgrade
 
-Write-Host "Planification de l'infrastructure backend..." -ForegroundColor Blue
+Write-Host "Planning..." -ForegroundColor Blue
 terraform plan
 
-Write-Host "Creation du bucket S3 et de la table DynamoDB..." -ForegroundColor Blue
+Write-Host "Creating S3 bucket and DynamoDB..." -ForegroundColor Blue
 terraform apply -auto-approve
 
-Write-Host "Backend S3 cree avec succes!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Prochaines etapes:" -ForegroundColor Yellow
-Write-Host "1. Votre bucket S3 et table DynamoDB sont crees"
-Write-Host "2. Le pipeline GitHub Actions utilisera automatiquement ce backend"
-Write-Host "3. Vous pouvez maintenant pousser sur main pour declencher le deploiement"
-Write-Host ""
-Write-Host "Ressources creees:" -ForegroundColor Cyan
+Write-Host "S3 backend created successfully!" -ForegroundColor Green
+Write-Host "Resources created:" -ForegroundColor Cyan
 terraform output
+
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Yellow
+Write-Host "  1. Push your code to GitHub" -ForegroundColor White
+Write-Host "  2. Pipeline will automatically use this backend" -ForegroundColor White

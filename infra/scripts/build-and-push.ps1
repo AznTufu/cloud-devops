@@ -1,38 +1,38 @@
-# Script PowerShell pour construire et pousser les images Docker vers Docker Hub
+# PowerShell script to build and push Docker images to Docker Hub
 # Usage: .\build-and-push.ps1 [docker-hub-username]
 
 param(
-    [string]$DockerHubUsername = "VOTRE_USERNAME_DOCKERHUB"
+    [string]$DockerHubUsername = "YOUR_DOCKERHUB_USERNAME"
 )
 
 $APP_NAME = "cloud-devops-app"
 
-Write-Host "🐳 Construction et push des images Docker..." -ForegroundColor Green
+Write-Host "Building and pushing Docker images..." -ForegroundColor Green
 
-# Vérifier que Docker est installé
+# Check that Docker is installed
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ Docker n'est pas installé" -ForegroundColor Red
+    Write-Host "Docker is not installed" -ForegroundColor Red
     exit 1
 }
 
-# Se déplacer dans le répertoire du projet
+# Move to project directory
 Set-Location $PSScriptRoot\..\..
 
-Write-Host "📦 Construction de l'image frontend..." -ForegroundColor Yellow
+Write-Host "Building frontend image..." -ForegroundColor Yellow
 docker build -t "${DockerHubUsername}/${APP_NAME}-frontend:latest" ./client
 
-Write-Host "📦 Construction de l'image backend..." -ForegroundColor Yellow
+Write-Host "Building backend image..." -ForegroundColor Yellow  
 docker build -t "${DockerHubUsername}/${APP_NAME}-backend:latest" ./server
 
-Write-Host "🔐 Connexion à Docker Hub (veuillez entrer vos identifiants)..." -ForegroundColor Blue
+Write-Host "Logging into Docker Hub (please enter your credentials)..." -ForegroundColor Blue
 docker login
 
-Write-Host "⬆️ Push de l'image frontend..." -ForegroundColor Cyan
+Write-Host "Pushing frontend image..." -ForegroundColor Cyan
 docker push "${DockerHubUsername}/${APP_NAME}-frontend:latest"
 
-Write-Host "⬆️ Push de l'image backend..." -ForegroundColor Cyan
+Write-Host "Pushing backend image..." -ForegroundColor Cyan
 docker push "${DockerHubUsername}/${APP_NAME}-backend:latest"
 
-Write-Host "✅ Images poussées avec succès vers Docker Hub!" -ForegroundColor Green
+Write-Host "Images pushed successfully to Docker Hub!" -ForegroundColor Green
 Write-Host "Frontend: ${DockerHubUsername}/${APP_NAME}-frontend:latest" -ForegroundColor White
 Write-Host "Backend: ${DockerHubUsername}/${APP_NAME}-backend:latest" -ForegroundColor White

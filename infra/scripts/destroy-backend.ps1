@@ -1,43 +1,87 @@
-# Script PowerShell pour detruire l'infrastructure backend S3 Terraform
-# ATTENTION: Cela supprimera le bucket S3 et tous les states Terraform stockes !
+# Terraform S3 Backend Destruction
+# WARNING: This will destroy the S3 bucket and DynamoDB table!
 
-Write-Host "ATTENTION: Destruction du backend Terraform S3..." -ForegroundColor Red
-Write-Host "Cela va supprimer:" -ForegroundColor Yellow
-Write-Host "- Le bucket S3 avec tous les states Terraform"
-Write-Host "- La table DynamoDB de locking"
-Write-Host ""
+Write-Host "Destroying Terraform S3 backend..." -ForegroundColor Yellow
 
-$confirm = Read-Host "Etes-vous sur de vouloir continuer? (yes/no)"
+# Navigate to backend directory
+$backendPath = "$PSScriptRoot\..\backend"
+Set-Location $backendPath
 
-if ($confirm -ne "yes") {
-    Write-Host "Annulation de la destruction." -ForegroundColor Green
-    exit 0
-}
-
-# Verifier que les credentials AWS sont configures
-try {
-    aws sts get-caller-identity | Out-Null
-    Write-Host "Credentials AWS OK" -ForegroundColor Green
-} catch {
-    Write-Host "Erreur: AWS credentials non configures" -ForegroundColor Red
-    Write-Host "Configurez vos credentials avec: aws configure" -ForegroundColor Yellow
+# Initialize Terraform
+Write-Host "Initializing Terraform..." -ForegroundColor Cyan
+terraform init
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error during Terraform initialization" -ForegroundColor Red
     exit 1
 }
 
-# Se deplacer dans le dossier backend
-$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
-Set-Location "$scriptPath\..\backend"
+# Plan destruction
+Write-Host "Planning destruction..." -ForegroundColor Cyan
+terraform plan -destroy
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error during destruction planning" -ForegroundColor Red
+    exit 1
+}
 
-Write-Host "Reinitialisation de Terraform..." -ForegroundColor Blue
-Remove-Item -Path ".terraform" -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -Path ".terraform.lock.hcl" -Force -ErrorAction SilentlyContinue
-terraform init
+# Ask for confirmation
+$confirmation = Read-Host "Do you really want to destroy the S3 backend? (yes/no)"
+if ($confirmation -ne "yes") {
+    Write-Host "Destruction cancelled." -ForegroundColor Yellow
+    exit 0
+}
 
-Write-Host "Vidage du bucket S3 avant destruction..." -ForegroundColor Blue
-aws s3 rm s3://cloud-devops-terraform-state-bucket --recursive
+# Empty S3 bucket before destruction (versioning management)
+Write-Host "Emptying S3 bucket (all versions)..." -ForegroundColor Cyan
+$bucket = "cloud-devops-terraform-state-bucket"
 
-Write-Host "Destruction de l'infrastructure backend..." -ForegroundColor Blue
+# Check if bucket exists
+try {
+    aws s3api head-bucket --bucket $bucket 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Deleting all object versions in bucket..." -ForegroundColor Yellow
+        
+        # Get all versions
+        $versionsJson = aws s3api list-object-versions --bucket $bucket --output json
+        if ($versionsJson) {
+            $versions = $versionsJson | ConvertFrom-Json
+            
+            # Delete all object versions
+            if ($versions.Versions) {
+                foreach ($version in $versions.Versions) {
+                    aws s3api delete-object --bucket $bucket --key $version.Key --version-id $version.VersionId > $null
+                }
+                Write-Host "Object versions deleted." -ForegroundColor Green
+            }
+            
+            # Delete all delete markers
+            if ($versions.DeleteMarkers) {
+                foreach ($deleteMarker in $versions.DeleteMarkers) {
+                    aws s3api delete-object --bucket $bucket --key $deleteMarker.Key --version-id $deleteMarker.VersionId > $null
+                }
+                Write-Host "Delete markers removed." -ForegroundColor Green
+            }
+        }
+        
+        # Delete remaining objects (just in case)
+        aws s3 rm s3://$bucket --recursive > $null 2>&1
+        Write-Host "S3 bucket emptied successfully." -ForegroundColor Green
+    } else {
+        Write-Host "S3 bucket doesn't exist or is already deleted." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "Error emptying S3 bucket, but continuing..." -ForegroundColor Yellow
+}
+
+# Destroy infrastructure
+Write-Host "Destroying infrastructure..." -ForegroundColor Red
 terraform destroy -auto-approve
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error during destruction" -ForegroundColor Red
+    exit 1
+}
 
-Write-Host "Backend S3 detruit avec succes!" -ForegroundColor Green
-Write-Host "Vous pouvez maintenant relancer setup-backend.ps1" -ForegroundColor Yellow
+Write-Host "S3 backend destroyed successfully!" -ForegroundColor Green
+
+# Return to scripts directory
+$scriptsPath = "$PSScriptRoot"
+Set-Location $scriptsPath

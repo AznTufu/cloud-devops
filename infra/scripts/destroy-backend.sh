@@ -1,40 +1,49 @@
 #!/bin/bash
-# Script pour détruire l'infrastructure backend S3 Terraform
-# ATTENTION: Cela supprimera le bucket S3 et tous les states Terraform stockés !
+# 🗑️ Terraform S3 Backend Destruction
+# WARNING: Removes S3 bucket and all Terraform states!
 
-echo "ATTENTION: Destruction du backend Terraform S3..."
-echo "Cela va supprimer:"
-echo "- Le bucket S3 avec tous les states Terraform"
-echo "- La table DynamoDB de locking"
+set -e
+
+echo "⚠️  DESTROYING Terraform S3 backend"
 echo ""
-read -p "Êtes-vous sûr de vouloir continuer? (yes/no): " confirm
+echo "This will delete:"
+echo "  - S3 bucket with all Terraform states"
+echo "  - DynamoDB lock table"
+echo ""
 
-if [ "$confirm" != "yes" ]; then
-    echo "Annulation de la destruction."
+read -p "Type 'DESTROY' to confirm destruction: " confirm
+if [ "$confirm" != "DESTROY" ]; then
+    echo "✅ Destruction cancelled"
     exit 0
 fi
 
-# Vérifier que les credentials AWS sont configurés
-if ! aws sts get-caller-identity > /dev/null 2>&1; then
-    echo "Erreur: AWS credentials non configurés"
-    echo "Configurez vos credentials avec: aws configure"
+# Check AWS credentials
+if aws sts get-caller-identity >/dev/null 2>&1; then
+    ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+    echo "✅ AWS connected - Account: $ACCOUNT"
+else
+    echo "❌ AWS credentials not configured"
     exit 1
 fi
 
-echo "Credentials AWS OK"
+# Go to backend directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/../backend"
 
-# Se déplacer dans le dossier backend
-cd "$(dirname "$0")/../backend"
+echo "🔧 Initializing Terraform..."
+terraform init -upgrade >/dev/null 2>&1
 
-echo "Réinitialisation de Terraform..."
-rm -rf .terraform .terraform.lock.hcl
-terraform init
+# Get bucket name and empty contents
+if BUCKET_NAME=$(terraform output -raw s3_bucket_name 2>/dev/null); then
+    echo "🗂️ Emptying bucket: $BUCKET_NAME"
+    aws s3 rm "s3://$BUCKET_NAME" --recursive
+else
+    echo "⚠️ Trying with default name"
+    aws s3 rm s3://cloud-devops-terraform-state-bucket --recursive
+fi
 
-echo "Vider le bucket S3 avant destruction..."
-aws s3 rm s3://cloud-devops-terraform-state-bucket --recursive
-
-echo "Destruction de l'infrastructure backend..."
+echo "🔨 Destroying resources..."
 terraform destroy -auto-approve
 
-echo "Backend S3 détruit avec succès!"
-echo "Vous pouvez maintenant relancer setup-backend.sh"
+echo ""
+echo "✅ S3 backend destroyed successfully!"

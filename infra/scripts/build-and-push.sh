@@ -1,39 +1,39 @@
 #!/bin/bash
 
-# Script pour construire et pousser les images Docker vers Docker Hub
+# Script to build and push Docker images to Docker Hub
 # Usage: ./build-and-push.sh [docker-hub-username]
 
 set -e
 
-DOCKER_HUB_USERNAME=${1:-"VOTRE_USERNAME_DOCKERHUB"}
+DOCKER_HUB_USERNAME=${1:-"YOUR_DOCKERHUB_USERNAME"}
 APP_NAME="cloud-devops-app"
 
-echo "🐳 Construction et push des images Docker..."
+echo "🐳 Building and pushing Docker images..."
 
-# Vérifier que Docker est installé
+# Check that Docker is installed
 if ! command -v docker &> /dev/null; then
-    echo "❌ Docker n'est pas installé"
+    echo "❌ Docker is not installed"
     exit 1
 fi
 
-# Se déplacer dans le répertoire du projet
+# Move to project directory
 cd "$(dirname "$0")/../.."
 
-echo "📦 Construction de l'image frontend..."
+echo "📦 Building frontend image..."
 docker build -t ${DOCKER_HUB_USERNAME}/${APP_NAME}-frontend:latest ./client
 
-echo "📦 Construction de l'image backend..."
+echo "📦 Building backend image..."
 docker build -t ${DOCKER_HUB_USERNAME}/${APP_NAME}-backend:latest ./server
 
-echo "🔐 Connexion à Docker Hub (veuillez entrer vos identifiants)..."
+echo "🔐 Logging into Docker Hub (please enter your credentials)..."
 docker login
 
-echo "⬆️ Push de l'image frontend..."
+echo "⬆️ Pushing frontend image..."
 docker push ${DOCKER_HUB_USERNAME}/${APP_NAME}-frontend:latest
 
-echo "⬆️ Push de l'image backend..."
+echo "⬆️ Pushing backend image..."
 docker push ${DOCKER_HUB_USERNAME}/${APP_NAME}-backend:latest
 
-echo "✅ Images poussées avec succès vers Docker Hub!"
+echo "✅ Images pushed successfully to Docker Hub!"
 echo "Frontend: ${DOCKER_HUB_USERNAME}/${APP_NAME}-frontend:latest"
 echo "Backend: ${DOCKER_HUB_USERNAME}/${APP_NAME}-backend:latest"

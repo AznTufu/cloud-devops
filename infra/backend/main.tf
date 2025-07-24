@@ -1,26 +1,17 @@
 # Script pour créer l'infrastructure de base pour le backend Terraform S3
 # Ce script doit être exécuté UNE SEULE FOIS avant d'utiliser le backend S3
 
-terraform {
-  # c'est pour créer les ressources du backend
-}
-
-provider "aws" {
-  region = "eu-west-1"
-}
-
-# Bucket S3 pour stocker le state Terraform
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "cloud-devops-terraform-state-bucket"
+  bucket = var.bucket_name
 
   tags = {
     Name        = "Terraform State Bucket"
-    Environment = "infrastructure"
+    Environment = var.environment
     Purpose     = "terraform-backend"
+    Project     = var.project_name
   }
 }
 
-# Versioning du bucket S3
 resource "aws_s3_bucket_versioning" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
   versioning_configuration {
@@ -28,7 +19,6 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
   }
 }
 
-# Chiffrement du bucket S3
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -39,7 +29,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" 
   }
 }
 
-# Bloquer l'accès public au bucket
 resource "aws_s3_bucket_public_access_block" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -49,9 +38,8 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
   restrict_public_buckets = true
 }
 
-# Table DynamoDB pour le lock du state
 resource "aws_dynamodb_table" "terraform_state_lock" {
-  name           = "terraform-state-lock"
+  name           = var.dynamodb_table_name
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "LockID"
 
@@ -62,8 +50,9 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
 
   tags = {
     Name        = "Terraform State Lock Table"
-    Environment = "infrastructure"
+    Environment = var.environment
     Purpose     = "terraform-backend"
+    Project     = var.project_name
   }
 }
 
@@ -73,7 +62,26 @@ output "s3_bucket_name" {
   description = "Nom du bucket S3 pour le state Terraform"
 }
 
+output "s3_bucket_arn" {
+  value = aws_s3_bucket.terraform_state.arn
+  description = "ARN du bucket S3"
+}
+
 output "dynamodb_table_name" {
   value = aws_dynamodb_table.terraform_state_lock.name
   description = "Nom de la table DynamoDB pour le lock"
+}
+
+output "dynamodb_table_arn" {
+  value = aws_dynamodb_table.terraform_state_lock.arn
+  description = "ARN de la table DynamoDB"
+}
+
+output "backend_config" {
+  value = {
+    bucket         = aws_s3_bucket.terraform_state.bucket
+    region         = var.aws_region
+    dynamodb_table = aws_dynamodb_table.terraform_state_lock.name
+  }
+  description = "Configuration complète du backend S3"
 }

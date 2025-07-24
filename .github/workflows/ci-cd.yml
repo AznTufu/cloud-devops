@@ -5,6 +5,16 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      destroy:
+        description: 'Destroy infrastructure (true/false)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 env:
   REGISTRY: docker.io
@@ -12,7 +22,7 @@ env:
   SERVER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/cloud-devops-app-backend
 
 jobs:
-  # Job 1: Build et Test
+  # Job 1: Build and Test
   build-and-test:
     runs-on: ubuntu-latest
     
@@ -43,9 +53,36 @@ jobs:
       - name: ✅ Test completed
         run: echo "✅ Tests passed successfully!"
 
-  # Job 2: Build et Push Docker Images
-  docker-build-push:
+  # Job 2: Verify S3 Backend
+  verify-backend:
     needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔧 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: 🔍 Verify S3 Backend exists
+        run: |
+          if aws s3api head-bucket --bucket "cloud-devops-terraform-state-bucket" 2>/dev/null; then
+            echo "✅ S3 Backend configured"
+          else
+            echo "❌ S3 Backend not found"
+            echo "🔧 Run first: ./infra/scripts/setup-backend.ps1"
+            exit 1
+          fi
+
+  # Job 3: Build and Push Docker Images
+  docker-build-push:
+    needs: [build-and-test, verify-backend]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
@@ -103,7 +140,7 @@ jobs:
           echo "🏷️  Version: ${{ steps.meta.outputs.VERSION }}"
           echo "📦 SHA: ${{ steps.meta.outputs.SHORT_SHA }}"
 
-  # Job 3: Deploy to AWS with Terraform
+  # Job 4: Deploy to AWS with Terraform
   deploy:
     needs: docker-build-push
     runs-on: ubuntu-latest
@@ -118,12 +155,12 @@ jobs:
         run: |
           echo "VERSION=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
 
-      - name: � Setup Terraform
+      - name: 🏗️ Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.0
 
-      - name: � Configure AWS credentials
+      - name: 🔧 Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -133,16 +170,16 @@ jobs:
       - name: 🏗️ Update Terraform variables with new image tags
         run: |
           cd infra/terraform
-          # Créer un fichier tfvars temporaire avec les nouvelles images
-          cat >> terraform.tfvars.tmp << EOF
+          # Remove existing dynamic variables and add new ones
+          grep -v "server_image_tag\|client_image_tag\|docker_hub_username" terraform.tfvars > terraform.tfvars.base || cp terraform.tfvars terraform.tfvars.base
+          cat terraform.tfvars.base > terraform.tfvars
+          
+          # Add new variables
+          cat >> terraform.tfvars << EOF
           server_image_tag = "${{ steps.image-info.outputs.VERSION }}"
           client_image_tag = "${{ steps.image-info.outputs.VERSION }}"
           docker_hub_username = "${{ secrets.DOCKER_USERNAME }}"
           EOF
-          # Fusionner avec le fichier existant
-          cat terraform.tfvars terraform.tfvars.tmp > terraform.tfvars.new
-          mv terraform.tfvars.new terraform.tfvars
-          rm terraform.tfvars.tmp
 
       - name: 🔍 Terraform Init
         run: |
@@ -168,19 +205,19 @@ jobs:
 
       - name: ⏳ Wait for application to be ready
         run: |
-          echo "⏳ Attente que l'application soit prête..."
+          echo "⏳ Waiting for application to be ready..."
           sleep 60
           
-          # Vérifier que l'application répond
+          # Check that application responds
           max_retries=10
           retry_count=0
           
           while [ $retry_count -lt $max_retries ]; do
             if curl -f -s "http://${{ steps.terraform-outputs.outputs.public_ip }}" > /dev/null; then
-              echo "✅ Application prête !"
+              echo "✅ Application ready!"
               break
             else
-              echo "⏳ Tentative $((retry_count + 1))/$max_retries - En attente..."
+              echo "⏳ Attempt $((retry_count + 1))/$max_retries - Waiting..."
               sleep 30
               retry_count=$((retry_count + 1))
             fi
@@ -194,7 +231,49 @@ jobs:
           echo "::notice title=Frontend URL::http://${{ steps.terraform-outputs.outputs.public_ip }}"
           echo "::notice title=Backend URL::http://${{ steps.terraform-outputs.outputs.public_ip }}:3005"
           echo ""
-          echo "🌐 Application accessible à :"
+          echo "🌐 Application accessible at:"
           echo "   - Frontend: http://${{ steps.terraform-outputs.outputs.public_ip }}"
           echo "   - Backend API: http://${{ steps.terraform-outputs.outputs.public_ip }}:3005"
           echo "   - DNS: http://${{ steps.terraform-outputs.outputs.public_dns }}"
+
+  # Job 5: Destroy Infrastructure (Manual only)
+  destroy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.destroy == 'true'
+    environment: production
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🏗️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: 🔧 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      - name: 🔄 Terraform Init with S3 Backend
+        run: |
+          cd infra/terraform
+          terraform init -reconfigure
+
+      - name: 📋 Terraform Plan Destroy
+        run: |
+          cd infra/terraform
+          terraform plan -destroy -out=destroy.tfplan
+
+      - name: 🗑️ Terraform Destroy
+        run: |
+          cd infra/terraform
+          terraform apply -auto-approve destroy.tfplan
+
+      - name: ✅ Destruction complete
+        run: |
+          echo "✅ Main infrastructure destroyed successfully!"
+          echo "💡 To destroy S3 backend, run destroy-backend.ps1 script locally"

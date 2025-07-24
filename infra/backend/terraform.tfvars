@@ -1,0 +1,5 @@
+aws_region            = "eu-west-1"
+bucket_name          = "cloud-devops-terraform-state-bucket"
+dynamodb_table_name  = "terraform-state-lock"
+project_name         = "cloud-devops"
+environment          = "infrastructure"

@@ -7,3 +7,5 @@ app_name = "cloud-devops-app"
 environment = "dev"
 public_subnet_count = 2
 private_subnet_count = 2
+
+# Docker images (will be updated by CI/CD)
